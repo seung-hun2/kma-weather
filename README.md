@@ -1,0 +1,79 @@
+# KMA Weather MCP Server
+
+Spring Boot 3.4.2 / Java 21 / Spring AI 1.1.5 / Streamable HTTP (`/mcp`).
+
+## 인증키 발급
+
+https://www.data.go.kr/data/15084084/openapi.do 접속 → 회원가입/로그인 → 활용신청 → 일반 인증키(Decoding) 확인.
+기상청 API허브 키와 혼용하지 않습니다.
+
+## 실행
+
+```bash
+export KMA_SERVICE_KEY='발급받은_일반_인증키_Decoding'
+./run.sh
+```
+
+접속: `http://localhost:8080/mcp` (로컬 전용 바인딩)
+
+## MCP 호출 (initialize → initialized → tools/list → tools/call)
+
+아래 curl 예시는 클라이언트가 세션 헤더를 확보하는 초기 연결 테스트입니다.
+
+```bash
+curl -i -X POST 'http://localhost:8080/mcp' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+```
+
+응답 헤더 `Mcp-Session-Id`가 있으면 후속 요청에 동일하게 전달하고, 응답에서 협상한 MCP protocol version을 `MCP-Protocol-Version` 헤더로 전송합니다. 이어서 `notifications/initialized`를 알린 후 다음을 호출합니다.
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+```
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_current_weather","arguments":{"nx":60,"ny":127}}}
+```
+
+날씨 예보:
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_short_term_forecast","arguments":{"nx":60,"ny":127}}}
+```
+
+## MCP Client 설정 예시 (Spring AI)
+
+```yaml
+spring:
+  ai:
+    mcp:
+      client:
+        streamable-http:
+          connections:
+            kma-weather:
+              url: http://localhost:8080
+```
+
+> 표본 격자: 서울(60,127), 수원(60,121), 부산(98,76). 다른 지역은 기상청 격자좌표 자료를 참조해야 합니다. 좌표는 위경도와 다릅니다.
+
+## 참고
+- 환경변수로 키를 넣고 저장소에 커밋하지 마세요.
+- 예보 기준시각은 발표 지연을 고려해 보수적으로 자동 계산합니다. 실제 지연이 길다면 이전 시각 재시도 로직을 추가하세요.
+- 시간별 예보 결과는 최대 48시점으로 제한됩니다. `numOfRows=1000`이므로 전체 예보 구간 일부만 조회될 수 있습니다.
+- 공공데이터포털은 경우에 따라 키 인코딩 상태와 응답 오류 형식이 다릅니다. 403 / API 오류 시 원문 오류를 확인하세요.
+- 외부 네트워크에 노출할 경우 인증·인가, TLS, 요청 제한, 접근 제어를 필수로 적용하세요.
+
+## Java 21 선택 및 빌드
+
+macOS 터미널의 기본 Java가 17이어도 `run.sh`는 설치된 Java 21을 선택합니다.
+
+```bash
+./run.sh clean verify
+export KMA_SERVICE_KEY='발급받은_일반_인증키_Decoding'
+./run.sh
+```
+
+IntelliJ에서도 Project SDK와 Maven Runner JRE를 Java 21로 선택하세요.
+`kma.base-url`은 application.yml에서 변경할 수 있으며, 설정이 누락되면 기상청 기본 주소를 사용합니다.

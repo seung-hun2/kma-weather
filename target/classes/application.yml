@@ -1,0 +1,19 @@
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: kma-weather-mcp
+
+  ai:
+    mcp:
+      server:
+        name: kma-weather-mcp
+        version: 1.0.0
+        protocol: STREAMABLE
+        type: SYNC
+
+kma:
+  base-url: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+  service-key: a1185b91eea0b4c69f3acbbed4775c7b7a0e42fe0a5cdf5cb8f4d8a76bfcabfc
